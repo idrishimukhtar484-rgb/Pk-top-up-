@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PK Diamond Store | User Panel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <style>
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #16a34a; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .active-nav { background-color: #16a34a !important; color: white !important; font-weight: bold; }
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-gray-50 text-slate-900">
+
+    <div id="splash-screen" class="fixed inset-0 bg-white flex flex-col items-center justify-center z-[100]">
+        <div class="text-center">
+            <span class="text-6xl">💎</span>
+            <h1 class="text-2xl font-black text-green-700 mt-4 tracking-tighter">PK DIAMOND STORE</h1>
+            <div class="loader mx-auto mt-6"></div>
+        </div>
+    </div>
+
+    <div id="login-screen" class="hidden min-h-screen flex items-center justify-center p-4">
+        <div class="bg-white p-8 rounded-[2.5rem] shadow-2xl w-full max-w-md border-b-8 border-green-600">
+            <h2 class="text-3xl font-black mb-2 text-slate-800">Welcome</h2>
+            <p class="text-gray-400 mb-8 text-sm">Sign in to start top-up</p>
+            <input type="email" id="email" placeholder="Email Address" class="w-full p-4 mb-4 bg-gray-50 border rounded-2xl outline-none focus:ring-2 focus:ring-green-500">
+            <input type="password" id="password" placeholder="Password" class="w-full p-4 mb-6 bg-gray-50 border rounded-2xl outline-none focus:ring-2 focus:ring-green-500">
+            <button onclick="login()" class="w-full bg-green-600 text-white font-black p-4 rounded-2xl hover:bg-green-700 shadow-lg transition">CONTINUE</button>
+        </div>
+    </div>
+
+    <div id="dashboard" class="hidden min-h-screen flex flex-col md:flex-row">
+        <nav class="w-full md:w-64 bg-slate-950 text-white p-6 flex flex-col">
+            <div class="text-xl font-black text-green-500 mb-6 flex items-center gap-2">
+                <span>🇵🇰</span> STORE HUB
+            </div>
+            
+            <div class="bg-slate-900 p-4 rounded-2xl mb-8 border border-slate-800">
+                <p class="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Logged in as:</p>
+                <p id="display-user-email" class="text-sm font-medium text-green-400 truncate">user@mail.com</p>
+            </div>
+
+            <div class="flex-1 space-y-2">
+                <button onclick="showSec('shop')" id="btn-shop" class="w-full text-left p-4 rounded-2xl active-nav transition">💎 Shop Diamonds</button>
+                <button onclick="showSec('history')" id="btn-history" class="w-full text-left p-4 rounded-2xl hover:bg-slate-900 transition text-slate-400">📜 Order History</button>
+            </div>
+            <button onclick="logout()" class="p-4 text-red-500 font-bold hover:bg-red-500/10 rounded-2xl transition mt-10">Logout</button>
+        </nav>
+
+        <main class="flex-1 p-6 md:p-10 overflow-y-auto">
+            
+            <div id="sec-shop">
+                <h2 class="text-2xl font-black mb-8 text-slate-800 uppercase tracking-tight">Select Package</h2>
+                <div id="product-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    </div>
+            </div>
+
+            <div id="sec-history" class="hidden">
+                <h2 class="text-2xl font-black mb-8 text-slate-800 uppercase tracking-tight">My Orders</h2>
+                <div id="history-container" class="space-y-4">
+                    </div>
+            </div>
+
+        </main>
+    </div>
+
+    <div id="pay-modal" class="fixed inset-0 bg-black/60 hidden flex items-center justify-center p-4 z-50">
+        <div class="bg-white w-full max-w-md rounded-[3rem] p-8 text-center shadow-2xl">
+            <h3 id="m-name" class="text-xl font-bold text-slate-700"></h3>
+            <p id="m-price" class="text-3xl font-black text-green-600 mb-6"></p>
+            
+            <div class="bg-slate-50 p-4 rounded-3xl mb-6 border border-slate-100">
+                <img id="admin-qr" src="" class="w-40 h-40 mx-auto rounded-xl shadow-sm border-4 border-white bg-white">
+                <p class="text-[10px] text-slate-400 mt-2 font-bold uppercase tracking-widest">EasyPaisa / JazzCash</p>
+            </div>
+
+            <input type="number" id="m-uid" placeholder="Enter Player UID" class="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl mb-4 text-center text-xl font-black outline-none focus:border-green-500">
+            
+            <button onclick="confirmAndSend()" class="w-full bg-green-600 text-white font-black py-4 rounded-2xl shadow-lg hover:bg-green-700 transition">SEND TO WHATSAPP</button>
+            <button onclick="closeModal()" class="w-full text-slate-300 font-bold mt-4 text-sm uppercase">Cancel</button>
+        </div>
+    </div>
+
+    <script>
+        // --- FIREBASE CONFIG ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyAk-Yru3dFna9rSWzPIPR5LXIPISEgk4YA",
+            authDomain: "alim-9ff31.firebaseapp.com",
+            projectId: "alim-9ff31",
+            storageBucket: "alim-9ff31.firebasestorage.app",
+            messagingSenderId: "554439655243",
+            appId: "1:554439655243:web:5c3e39e688e5a2153472ce"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        let curPack = {};
+        let adminWhatsApp = "923336774037";
+
+        // --- AUTH & LOGIN ---
+        auth.onAuthStateChanged(user => {
+            setTimeout(() => {
+                document.getElementById('splash-screen').classList.add('hidden');
+                if (user) {
+                    document.getElementById('dashboard').classList.remove('hidden');
+                    document.getElementById('login-screen').classList.add('hidden');
+                    document.getElementById('display-user-email').innerText = user.email;
+                    loadShop();
+                    loadAdminData();
+                    loadUserHistory(user.uid);
+                } else {
+                    document.getElementById('login-screen').classList.remove('hidden');
+                    document.getElementById('dashboard').classList.add('hidden');
+                }
+            }, 1500);
+        });
+
+        function login() {
+            const e = document.getElementById('email').value;
+            const p = document.getElementById('password').value;
+            if(!e || !p) return alert("Fill details!");
+            auth.signInWithEmailAndPassword(e, p).catch(() => auth.createUserWithEmailAndPassword(e, p));
+        }
+
+        function logout() { auth.signOut(); location.reload(); }
+
+        // --- NAVIGATION ---
+        function showSec(id) {
+            document.getElementById('sec-shop').classList.toggle('hidden', id !== 'shop');
+            document.getElementById('sec-history').classList.toggle('hidden', id !== 'history');
+            document.getElementById('btn-shop').className = id === 'shop' ? 'w-full text-left p-4 rounded-2xl active-nav' : 'w-full text-left p-4 rounded-2xl text-slate-400';
+            document.getElementById('btn-history').className = id === 'history' ? 'w-full text-left p-4 rounded-2xl active-nav' : 'w-full text-left p-4 rounded-2xl text-slate-400';
+        }
+
+        // --- LIVE SHOP LOGIC (Connects to Admin) ---
+        function loadShop() {
+            const list = document.getElementById('product-list');
+            db.collection("packages").orderBy("createdAt", "desc").onSnapshot(snap => {
+                if (snap.empty) {
+                    list.innerHTML = "<p class='text-gray-400 col-span-full text-center'>Admin has not added any packages yet.</p>";
+                    return;
+                }
+                list.innerHTML = "";
+                snap.forEach(doc => {
+                    const pk = doc.data();
+                    list.innerHTML += `
+                        <div class="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 text-center hover:border-green-500 transition duration-300">
+                            <div class="text-4xl mb-4">💎</div>
+                            <h3 class="font-bold text-slate-700">${pk.name}</h3>
+                            <p class="text-green-600 font-black text-3xl my-4">Rs ${pk.price}</p>
+                            <button onclick="openPay('${pk.name}', ${pk.price})" class="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold hover:bg-green-600 transition">BUY NOW</button>
+                        </div>`;
+                });
+            });
+        }
+
+        function loadAdminData() {
+            db.collection("settings").doc("admin_config").onSnapshot(doc => {
+                if(doc.exists) {
+                    document.getElementById('admin-qr').src = doc.data().qr_url;
+                    adminWhatsApp = doc.data().whatsapp_number;
+                }
+            });
+        }
+
+        // --- PAYMENT & ORDER ---
+        function openPay(n, p) {
+            curPack = { n, p };
+            document.getElementById('m-name').innerText = n;
+            document.getElementById('m-price').innerText = "Rs " + p;
+            document.getElementById('pay-modal').classList.remove('hidden');
+        }
+
+        function closeModal() { document.getElementById('pay-modal').classList.add('hidden'); }
+
+        function confirmAndSend() {
+            const uid = document.getElementById('m-uid').value;
+            if(!uid) return alert("Enter Player UID!");
+            
+            const msg = `*NEW DIAMOND ORDER*%0A*Item:* ${curPack.n}%0A*Price:* Rs ${curPack.p}%0A*UID:* ${uid}`;
+            
+            db.collection("orders").add({
+                user_id: auth.currentUser.uid,
+                user_email: auth.currentUser.email,
+                game_id: uid,
+                item: curPack.n,
+                amount: curPack.p,
+                status: "Pending ⏳",
+                time: firebase.firestore.FieldValue.serverTimestamp()
+            }).then(() => {
+                window.open(`https://wa.me/${adminWhatsApp}?text=${msg}`, '_blank');
+                closeModal();
+            });
+        }
+
+        // --- ORDER HISTORY ---
+        function loadUserHistory(uid) {
+            db.collection("orders").where("user_id", "==", uid).onSnapshot(snap => {
+                const container = document.getElementById('history-container');
+                container.innerHTML = snap.empty ? "<p class='text-gray-400 text-center p-10'>No orders found.</p>" : "";
+                snap.forEach(doc => {
+                    const d = doc.data();
+                    let stColor = d.status.includes("✅") ? "bg-green-100 text-green-700" : (d.status.includes("❌") ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700");
+                    container.innerHTML += `
+                        <div class="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex justify-between items-center">
+                            <div>
+                                <h4 class="font-black text-slate-800">${d.item}</h4>
+                                <p class="text-[10px] text-gray-400 font-bold tracking-widest mt-1 uppercase">UID: ${d.game_id} | Rs ${d.amount}</p>
+                            </div>
+                            <div class="px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-wider ${stColor}">${d.status}</div>
+                        </div>`;
+                });
+            });
+        }
+    </script>
+</body>
+</html>
